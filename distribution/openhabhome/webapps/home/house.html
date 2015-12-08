@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+  <html>
+    <head>
+      <script type="text/javascript" src="js/jquery-1.6.4.js"></script>
+      
+      <link type="text/css" rel="stylesheet" href="css/materialize.min.css"  media="screen,projection"/>
+    </head>
+    <body>
+       <div class="navbar-fixed">
+    <nav>
+      <div class="nav-wrapper">
+          <ul class="left">
+            <a href="#" class="brand-logo center">InnovationHub</a>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="items.html">Items</a></li>
+            <li><a href="rules.html">Rules</a></li>
+	    <li class="active"><a href="house.html?surl=innohub">Current House</a></li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+    <div class="container">
+      <h1>Sitemap</h1>
+      <script>
+      var QueryString = function () {
+        var query_string = {};
+        var query = window.location.search.substring(1);
+        var vars = query.split("&");
+        for (var i=0;i<vars.length;i++) {
+          var pair = vars[i].split("=");
+          if (typeof query_string[pair[0]] === "undefined") {
+            query_string[pair[0]] = decodeURIComponent(pair[1]);
+          } else if (typeof query_string[pair[0]] === "string") {
+            var arr = [ query_string[pair[0]],decodeURIComponent(pair[1]) ];
+            query_string[pair[0]] = arr;
+          } else {
+            query_string[pair[0]].push(decodeURIComponent(pair[1]));
+          }
+        } 
+        return query_string;
+      }();
+
+      var sitemapName = QueryString.surl;
+
+      var div = document.createElement('div');
+      div.className = "container"
+      var iframe = document.createElement('iframe');
+      iframe.style.display = "block";
+      iframe.style.maxWidth = "100%";
+      iframe.style.width = "40em";
+      iframe.style.height = "100em";
+      if(typeof sitemapName === 'undefined'){
+        iframe.src = "/openhab.app?sitemap=innohub"
+      }
+      else {
+        // If user is viewing our default innohub sitemap
+        // we need to refresh the sitemap from any changes in the .items
+        if(sitemapName === 'innohub') {
+          // Parse items files and recreate sitemap based on any user changes
+          var re = /^(\S*)\s*(\S*)(\s*)(\".*\")(\s*)?({.*})?$/;
+          var itemsFiles = "/services/innovationhub/files/items";
+          var sitemapItemLines = [];
+          var sitemapStructure = "sitemap innohub label=\"Main Menu\"\n{\n\tFrame {\n\t\t";
+          // Applies regex to items and pushes Switches to sitemap file
+          $.getJSON(itemsFiles,function(result){
+            $.each(result, function(key,val) {
+              var lines = val.split("\n");
+              for(i=0; i<lines.length; i++) {
+                var fields = lines[i].match(re);
+                if(fields !== null) {
+                  // Line is valid, append to new sitemap file
+                  if (fields[1] === 'Switch' || fields[1] === 'Dimmer') {
+                    sitemapItemLines.push('Switch item=' + fields[2]);
+                  }
+                }
+              }
+            });
+
+            var sitemapInner = sitemapItemLines.join("\n\t\t");
+            sitemapStructure += sitemapInner + "\n\t}\n}";
+
+            // Write new sitemap file before displaying iframe
+            $.ajax({
+              url: '/services/innovationhub/files/sitemaps/innohub',
+              data: sitemapStructure,
+              type: 'POST',
+              contentType: 'text/plain',
+              success: function(status) {
+                console.log("success!");
+              },
+              error: function(status) {
+                console.log("error!");
+              }
+            });
+            iframe.src = "/openhab.app?sitemap=" + sitemapName
+          });
+
+
+        }
+      }
+      div.appendChild(iframe)
+      document.body.appendChild(div);
+      </script>
+    </body>
+  </html>

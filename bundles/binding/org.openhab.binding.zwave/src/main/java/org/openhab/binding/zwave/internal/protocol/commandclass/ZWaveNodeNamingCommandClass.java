@@ -35,7 +35,7 @@ import com.thoughtworks.xstream.annotations.XStreamOmitField;
  * the means to specify where in the home a device is located and what friendly name it has instead
  * of working with just node numbers.
  * 
- * An openHab administration tool like HABmin can set and read the nodes' names and locations.
+ * An openHab administration tool like innovationhub can set and read the nodes' names and locations.
  * 
  * @author Pedro Paixao
  * @since 1.8.0

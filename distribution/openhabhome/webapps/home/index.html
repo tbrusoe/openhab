@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+  <html>
+    <head>
+      <script type="text/javascript" src="js/jquery-1.11.3.min.js"></script>
+      <script type="text/javascript" src="js/materialize.js"></script>
+      <link type="text/css" rel="stylesheet" href="css/materialize.min.css"  media="screen,projection"/>
+      <link type="text/css" rel="stylesheet" href="css/home.css"/>
+      <script>
+      $(document).ready(function() {
+        $(".collapsible").html("");
+        var sitemaps = "/services/innovationhub/files/sitemaps";
+        var reLabel = /label="(.*)"/
+        $.getJSON(sitemaps, function(result){
+          $.each(result, function(key, val){
+            var name = key.slice(0, -8) ;
+           var label = reLabel.exec(val)[1];
+            var div = $('<li><div class="collapsible-header" id="' + name + '">'+ label +'</div><div class="collapsible-body"><textarea disabled class="grey white-text" spellcheck="false" id="'+name+ '_box">'+ val +'</textarea><a href="/home/house.html?surl='+name+'" class="blue waves-effect waves-light btn" style="margin: 5px">Display Sitemap</a><a class="orange waves-light btn savefile" data-name="'+ name +'" style="margin: 5px;display:none">Save File</a><a class="waves-effect waves-light btn edit" style="margin: 5px" data-name="' + name + '">Edit File</a></div></li>');
+            $(".collapsible").append(div);
+          });
+        });
+          $(document.body).on('click','.savefile',function(event){
+            updateSitemapFile(event);
+          });
+          $(document.body).on('click','.edit',function(event){
+            editSitemapFile(event);
+          });
+      });
+    var updateSitemapLabel = function(){
+          var sitemapFiles = "/services/innovationhub/files/sitemaps";
+         var reLabel = /label="(.*)"/;
+          $.getJSON(sitemapFiles, function(result){
+            $.each(result, function(key, val){
+                  var name = key.slice(0, -8) ;
+                  var label = reLabel.exec(val)[1];
+                  $("#" + name).text(label);
+                });
+          });
+        }
+    var updateSitemapFile = function(event){
+          var $el = $(event.target);
+          var name = $el.data('name');
+          var $box = $('#'+name+'_box');
+          var payload = $box.val();
+          $box.prop("disabled","disabled");
+          $box.removeClass('darken-3');
+          $el.hide();
+          $el.prev('a').show();
+          $.ajax({
+            url:'/services/innovationhub/files/sitemaps/' + name,
+            data: payload,
+            type: 'POST',
+            contentType: 'text/plain',
+            success: function(status){
+               updateSitemapLabel();
+               Materialize.toast(status,3000);
+               //see below SIDENOTE
+            },
+            error: function (status) {
+               Materialize.toast('Failed to update file',3000);
+            }
+          })
+      }
+      var editSitemapFile = function(event){
+         var $el = $(event.target);
+         var name = $el.data('name');
+         var $box = $('#' + name + '_box');
+         $el.prev('a').show();
+         $el.prev('a').prev('a').hide();
+         $box.prop("disabled",false)
+         $box.addClass('darken-3');
+       }
+      $(".collapsible").collapsible();
+      </script>
+    </head>
+    <body>
+    <div class="navbar-fixed">
+    <nav>
+      <div class="nav-wrapper">
+          <ul class="left">
+            <a href="#" class="brand-logo center">InnovationHub</a>
+            <li class="active"><a href="index.html">Home</a></li>
+            <li><a href="items.html">Items</a></li>
+            <li><a href="rules.html">Rules</a></li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+    <div class="container" id="items">
+      <h1>House sitemaps</h1>    
+      <ul class="collapsible" data-collapsible="accordion">
+      </ul>
+    </div>
+    </body>
+  </html>

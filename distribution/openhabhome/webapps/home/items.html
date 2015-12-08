@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+  <html>
+    <head>
+      <script type="text/javascript" src="js/jquery-1.11.3.min.js"></script>
+      <script type="text/javascript" src="js/materialize.js"></script>
+      <link type="text/css" rel="stylesheet" href="css/materialize.min.css"  media="screen,projection"/>
+      <link type="text/css" rel="stylesheet" href="css/home.css"/>
+      <script>
+			$(document).ready(function() {
+            createCollapse();
+            createTable();
+            $(document.body).on('click','.save',function(event){
+                updateItemsFile(event);
+            });
+            $(document.body).on('click','.edit',function(event){
+                editItemsFile(event);
+            });
+            $(document.body).on('click','.del',function(event){
+                deleteItemsFile(event);
+            });
+            $('.modal-trigger').leanModal({
+              ready:function () {
+                  //clean up modal
+                  $("#itemname").val("");
+                  $("#label").val("");
+                  $("#bindings").val("");
+              }
+            });
+        });
+        var createTable = function(){
+          $("#tablebody").html(""); //clean the table of elements
+          var items = "/rest/items?type=json";
+          $.getJSON(items, function(result){
+            if(Array.isArray(result.item)){
+              result = result.item;
+            };
+            $.each(result, function(i, item){
+              var tr = $('<tr><td>'+item.name+'</td><td>'+item.type+'</td></tr>')
+              $("#tablebody").append(tr);
+            });
+
+          });
+
+
+        }
+        var createCollapse = function(){
+            $('.collapsible').html(""); //clean out the elements
+            var itemsFiles = "/services/innovationhub/files/items";
+            $.getJSON(itemsFiles,function(result){
+                $.each(result, function(key,val){
+                  var name = key.slice(0,-6) //remove extension
+                  var div = $('<li><div class="collapsible-header">'+ name +'</div><div class="collapsible-body"><textarea disabled class="grey white-text" spellcheck="false" id="'+name+ '_box">'+ val +'</textarea><a class="orange waves-light btn save" data-name="'+ name +'" style="display:none">Save File</a><a class="blue waves-light btn edit" data-name="'+ name +'">Edit File</a><a class="red waves-light btn del" data-name="'+ name +'">Delete File</a></div></li>');
+                  $('.collapsible').append(div);
+                });
+            });
+
+        }
+
+        var deleteItemsFile = function(event){
+            var $el = $(event.target);
+            var name = $el.data('name');
+            $.ajax({
+              url:'/services/innovationhub/files/items/' + name,
+              type: 'DELETE',
+              contentType: 'text/plain',
+              success: function(status){
+                  //recreate elements without refreshing entire page, or else we lose the messaging
+                  createCollapse();
+                  createTable();
+                  Materialize.toast(status,3000);
+                 /* SIDENOTE : openhab takes a while to reflect changes on the backend
+                    , so this may not be realtime. We could add a warning label that the item
+                    list may take some time to update.
+                 */
+              },
+              error: function (status) {
+                 Materialize.toast('Failed to delete the file',3000);
+              }
+            })
+        }
+        
+        var createItemsFile = function(event){
+            //itemtype itemname "labeltext" <iconname> (group1, group2, ...) {bindingconfig}
+            var payload = "";
+            var num = 1;
+            var curItem = "item"+num;
+            var valid = true;
+
+			var items = "/rest/items?type=json";
+            var namesList = [];
+            $.getJSON(items, function(result){
+
+     		 while(document.getElementById(curItem)) {
+              var type = $("#type"+num).val();
+              var name = $("#itemname"+num).val();
+              var label = $("#label"+num).val();
+              label = label == "" ? label :  '\t'+ label;
+              var binding = $("#binding"+num).val();
+              binding = binding == "" ? binding :  '\t{'+binding+'}';
+
+              if(Array.isArray(result.item)){
+                  result = result.item;
+              }
+              $.each(result, function(i, item){
+                  namesList.push(item.name);
+              });
+              if(type == null || name == "") {
+                Materialize.toast("Item type and Item name are required values",3000);
+                valid = false;
+                break;
+			  }else if(namesList.indexOf(name) != -1){
+				Materialize.toast("Item name must be unique",3000);
+				valid = false;
+                break;
+			  }else if(/^[a-zA-Z\s]+$/.test(name) == false){
+			    Materialize.toast("Item name must only contain letters.",3000);
+				valid = false;
+                break;
+			  }else{
+                payload = payload + ''+type+'\t'+name+''+label+''+binding+'\n';
+              }
+
+              num++;
+              curItem="item"+num;
+            }
+            if(valid) {
+              $.ajax({
+                url:'/services/innovationhub/files/items/innohub',
+                data: payload,
+                type: 'POST',
+                contentType: 'text/plain',
+				async: false,
+                complete: function(){
+
+                  createCollapse();
+				  createTable();
+
+                  Materialize.toast(status,3000);
+                  //see above SIDENOTE
+                },
+                error: function (status) {
+                  Materialize.toast('Failed to create file',3000);
+                }
+              })
+            }
+
+			});
+
+        }
+
+        var updateItemsFile = function(event){
+            var $el = $(event.target);
+            var name = $el.data('name');
+            var $box = $('#'+name+'_box');
+            var payload = $box.val();
+            $box .prop("disabled","disabled");
+            $box .removeClass('darken-3');
+            $el.hide();
+            $.ajax({
+              url:'/services/innovationhub/files/items/innohub/edit',
+              data: payload,
+              type: 'POST',
+              contentType: 'text/plain',
+              success: function(status){
+                 createTable();
+                 Materialize.toast(status,3000);
+                 //see above SIDENOTE
+              },
+              error: function (status) {
+                 Materialize.toast('Failed to update file',3000);
+              }
+            })
+        }
+        var editItemsFile = function(event){
+            var $el = $(event.target);
+            var name = $el.data('name');
+            var $box = $('#'+name+'_box')
+            $el.prev('a').show();
+            $box.prop("disabled",false)
+            $box.addClass('darken-3');
+        }
+
+        var addNewItem = function(event) {
+          //type itemname label icon groups binding
+          var $lastDiv = $('div[id^="item"]:last');
+          var num = parseInt( $lastDiv.prop("id").match(/\d+/g), 10 ) + 1;
+          var $newItem = $lastDiv.clone().prop('id', 'item'+num );
+          $lastDiv.after($newItem);
+          var elems = document.getElementById("item"+num).getElementsByClassName("input-field col s2");
+          for(i=0; i<elems.length; i++) {
+            var child = elems[i].children[0];
+            child.id = child.id.replace(/[0-9]/g, '');
+            child.id = child.id+num;
+            child.value = '';
+          }
+        }
+
+        var deleteLastItem = function(event){
+          var $lastDiv = $('div[id^="item"]:last');
+          var num = parseInt( $lastDiv.prop("id").match(/\d+/g), 10 ) + 1;
+          if(num > 2){
+            $lastDiv.remove();
+          }
+        }
+
+
+        $('.collapsible').collapsible();
+      </script>
+    </head>
+    <body>
+       <div class="navbar-fixed">
+    <nav>
+      <div class="nav-wrapper">
+          <ul class="left">
+            <a href="#" class="brand-logo center">InnovationHub</a>
+            <li><a href="index.html">Home</a></li>
+            <li class="active"><a href="items.html">Items</a></li>
+            <li><a href="rules.html">Rules</a></li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+      <div class="container" id="items">
+        <h4>Current Items Files</h4>
+        <ul class="collapsible" data-collapsible="accordion">
+        </ul>
+      </div>
+      <div class="container">
+        <a class="waves-light btn modal-trigger" href="#addItemModal">Add items</a>
+        <div id="addItemModal" class="modal modal-fixed-footer" style="width:70%">
+          <div class="modal-content">
+            <h4>Add Items to InnoHub</h4>
+            <div class="row" id="item1">
+              <div class="input-field col s2">
+                <select id="type1">
+                  <option value="" disabled selected>Type</option>
+                  <option value="Call">Call</option>
+                  <option value="Color">Color</option>
+                  <option value="Contact">Contact</option>
+                  <option value="DateTime">DateTime</option>
+                  <option value="Dimmer">Dimmer</option>
+                  <option value="Group">Group</option>
+                  <option value="Location">Location</option>
+                  <option value="Number">Number</option>
+                  <option value="RollerShutter">RollerShutter</option>
+                  <option value="String">String</option>
+                  <option value="Switch">Switch</option>
+                </select>
+              </div>
+              <div class="input-field col s2">
+                <input placeholder="" id="itemname1" type="text">
+                <label for="itemname">Item Name</label>
+              </div>
+              <div class="input-field col s2">
+                <input placeholder="" id="label1" type="text">
+                <label for="label">Label Text</label>
+              </div>
+              <div class="input-field col s2">
+                <input placeholder="" id="binding1" type="text">
+                <label for="binding">Binding</label>
+              </div>
+            </div>
+            <div class="row">
+              <div class="input-field col s4">
+                <a id="addRow" class="modal-action waves-light btn" onclick="addNewItem()">Add New Item</a>
+              </div>
+
+              <div class="input-field col s4">
+                <a id="delRow" class="modal-action waves-dark red btn" onclick="deleteLastItem()">Remove Last Item</a>
+              </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <a id="addItem" class="modal-action modal-close waves-light btn" onclick="createItemsFile()">Add</a>
+          </div>
+        </div>
+      </div>
+      <div class="container">
+        <h4>Current Items</h4>
+        <table class="striped">
+          <thead>
+            <tr>
+                <th data-field="id">Item Name</th>
+                <th data-field="type">Item Type</th>
+            </tr>
+          </thead>
+          <tbody id="tablebody">
+          </tbody>
+        </table>
+        </div>
+    </body>
+  </html>

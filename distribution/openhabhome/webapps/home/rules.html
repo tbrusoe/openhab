@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+  <html>
+    <head>
+      <script type="text/javascript" src="js/jquery-1.11.3.min.js"></script>
+      <script type="text/javascript" src="js/materialize.js"></script>
+      <link type="text/css" rel="stylesheet" href="css/materialize.min.css"  media="screen,projection"/>
+      <link type="text/css" rel="stylesheet" href="css/home.css"/>
+      <script>
+        $(document).ready(function() {
+            createCollapse();
+            $(document.body).on('click','.save',function(event){
+                updateRulesFile(event);
+            });
+            $(document.body).on('click','.edit',function(event){
+                editRulesFile(event);
+            });
+            $(document.body).on('click','.del',function(event){
+                deleteRulesFile(event);
+            });
+            $('.modal-trigger').leanModal({
+              ready:function () {
+                  //clean up modal
+                  $("#rulename").val("");
+                  $("#label").val("");
+                  $("#icon").val("");
+                  $("#groups").val("");
+                  $("#bindings").val("");
+              }
+            });
+        });
+
+        var createCollapse = function(){
+            $('.collapsible').html(""); //clean out the elements
+            var rulesFiles = "/services/innovationhub/files/rules";
+            $.getJSON(rulesFiles,function(result){
+                $.each(result, function(key,val){
+                  var name = key.slice(0,-6) //remove extension
+                  var div = $('<li><div class="collapsible-header">'+ name +'</div><div class="collapsible-body"><textarea disabled class="grey white-text" spellcheck="false" id="'+name+ '_box">'+ val +'</textarea><a class="orange waves-light btn save" data-name="'+ name +'" style="display:none">Save File</a><a class="blue waves-light btn edit" data-name="'+ name +'">Edit File</a><a class="red waves-light btn del" data-name="'+ name +'">Delete File</a></div></li>');
+                  $('.collapsible').append(div);
+                });
+            });
+        }
+        var deleteRulesFile = function(event){
+            var $el = $(event.target);
+            var name = $el.data('name');
+            $.ajax({
+              url:'/services/innovationhub/files/rules/' + name,
+              type: 'DELETE',
+              contentType: 'text/plain',
+              success: function(status){
+                  //recreate elements without refreshing entire page, or else we lose the messaging
+                  createCollapse();
+                  createTable();
+                  Materialize.toast(status,3000);
+                 /* SIDENOTE : openhab takes a while to reflect changes on the backend
+                    , so this may not be realtime. We could add a warning label that the rule
+                    list may take some time to update.
+                 */
+              },
+              error: function (status) {
+                 Materialize.toast('Failed to delete the file',3000);
+              }
+            })
+        }
+
+        var createRulesFile = function(event){
+            //ruletype rulename "labeltext" <iconname> (group1, group2, ...) {bindingconfig}
+            var payload = "";
+            var num = 1;
+            var curRule = "rule"+num;
+            var valid = true;
+            while(document.getElementById(curRule) && valid) {
+              var name = $("#rulename"+num).val();
+	          name = name == "" ? name : 'rule \"'+name+'\"\nwhen\n';
+              var ifitem = $("#ifitem"+num).children("option").filter(":selected").text();
+              var item = ifitem
+              ifitem = ifitem == "" ? ifitem :  '\tItem '+ifitem+' changed\nthen\n';
+              var comparator = $("#comparator"+num).val();
+              var tmp_comp = comparator;
+              comparator = comparator == "" ? comparator :  '\tif('+item+'.state'+ comparator;
+              var ifstate = $("#ifstate"+num).val();
+              ifstate = ifstate == "" ? ifstate :  ifstate + ") {\n";
+              var thenitem = $("#thenitem"+num).children("option").filter(":selected").text();
+              thenitem = thenitem == "" ? thenitem :  '\t\t'+ thenitem + '.state = ';
+              var thenstate = $("#thenstate"+num).val();
+              thenstate = thenstate == "" ? thenstate :  thenstate + '\n\t}\nend';
+
+              if(name == "" || ifitem == "" || comparator == "" || ifstate == "" ||
+                 thenitem == "" || thenstate == "" || item == "If" || tmp_comp == null) {
+                Materialize.toast("All fields are required values",3000);
+                valid = false;
+                break;
+              } else {
+                payload = payload +''+name+''+ifitem+''+comparator+''+ifstate+''+thenitem+''+thenstate+'\n';
+              }
+              num++;
+              curRule="rule"+num;
+            }
+            if(valid) {
+              $.ajax({
+                url:'/services/innovationhub/files/rules/innohub',
+                data: payload,
+                type: 'POST',
+                contentType: 'text/plain',
+                success: function(status){
+                  createTable();
+                  Materialize.toast(status,3000);
+                  //see above SIDENOTE
+                },
+                error: function (status) {
+                  Materialize.toast('Failed to create file',3000);
+                }
+              })
+              location.reload();
+            }
+        }
+
+        var updateRulesFile = function(event){
+            var $el = $(event.target);
+            var name = $el.data('name');
+            var $box = $('#'+name+'_box');
+            var payload = $box.val();
+            $box .prop("disabled","disabled");
+            $box .removeClass('darken-3');
+            $el.hide();
+            $.ajax({
+              url:'/services/innovationhub/files/rules/' + name,
+              data: payload,
+              type: 'POST',
+              contentType: 'text/plain',
+              success: function(status){
+                 createTable();
+                 Materialize.toast(status,3000);
+                 //see above SIDENOTE
+              },
+              error: function (status) {
+                 Materialize.toast('Failed to update file',3000);
+              }
+            })
+        }
+        var editRulesFile = function(event){
+            var $el = $(event.target);
+            var name = $el.data('name');
+            var $box = $('#'+name+'_box')
+            $el.prev('a').show();
+            $box.prop("disabled",false)
+            $box.addClass('darken-3');
+        }
+
+        var addNewRule = function(event) {
+          //type rulename label icon groups binding
+          var $lastDiv = $('div[id^="rule"]:last');
+          var num = parseInt( $lastDiv.prop("id").match(/\d+/g), 10 ) + 1;
+          var $newRule = $lastDiv.clone().prop('id', 'rule'+num );
+          $lastDiv.after($newRule);
+          var elems = document.getElementById("rule"+num).getElementsByClassName("input-field col s2");
+          for(i=0; i<elems.length; i++) {
+            var child = elems[i].children[0];
+            child.id = child.id.replace(/[0-9]/g, '');
+            child.id = child.id+num;
+            if(child.id == "comparator"+num){
+              child.value = 'Is'
+            }else{
+              child.value = '';
+            }
+          }
+        }
+
+        var deleteLastRule = function(event){
+          var $lastDiv = $('div[id^="rule"]:last');
+          var num = parseInt($lastDiv.prop("id").match(/\d+/g), 10 ) + 1;
+          if(num > 2){
+            $lastDiv.remove();
+          }
+        }
+
+        $('.collapsible').collapsible();
+      </script>
+      <script>
+        var setState = function(ele, flag) {
+          var num = parseInt( ele.id.match(/\d+/g), 10 );
+          var value = ele.value;
+          if (flag == 'if'){
+            var comparator = document.getElementById("comparator"+num);
+            if(value == 'DimmerItem' || value == 'NumberItem'){
+              comparator.disabled=false
+              comparator.value = "Is"
+            }
+            else{
+            comparator.disabled=true
+            comparator.value = "=="
+          }
+          }
+        }
+      </script>
+    </head>
+    <body>
+       <div class="navbar-fixed">
+    <nav>
+      <div class="nav-wrapper">
+          <ul class="left">
+            <a href="#" class="brand-logo center">InnovationHub</a>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="items.html">Items</a></li>
+            <li class="active"><a href="rules.html">Rules</a></li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+      <div class="container" id="rules">
+        <h4>Current Rules Files</h4>
+        <ul class="collapsible" data-collapsible="accordion">
+        </ul>
+      </div>
+      <div class="container">
+        <a class="waves-light btn modal-trigger" href="#addRuleModal">Add rule</a>
+        <div id="addRuleModal" class="modal modal-fixed-footer" style="width:70%">
+          <div class="modal-content">
+            <h4>Create a new Rules File</h4>
+            <div class="row" id="rule1">
+              <div class="input-field col s2">
+                <input id="rulename1" type="text">
+                <label for="rulename">Rule Name</label>
+              </div>
+              <div class="input-field col s2">
+                <select id="ifitem1" onchange="setState(this,'if')">
+                  <option value="" disabled selected>If</option>
+                </select>
+              </div>
+              <div class="input-field col s2">
+                <select id="comparator1" disable="true">
+                  <option value="Is" disabled selected>Is</option>
+                  <option value="<"> < </option>
+                  <option value="<="> <= </option>
+                  <option value="=="> == </option>
+                  <option value=">="> >= </option>
+                  <option value=">"> > </option>
+                </select>
+              </div>
+              <div class="input-field col s2">
+                <input id="ifstate1" type="text">
+                <label for="ifstate">State</label>
+              </div>
+              <div class="input-field col s2">
+                <select id="thenitem1">
+                  <option value="" disabled selected>Then set</option>
+                </select>
+              </div>
+              <div class="input-field col s2">
+                <input id="thenstate1" type="text">
+                <label for="thenstate1">To</label>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="input-field col s4">
+                <a id="addRow" class="modal-action waves-light btn" onclick="addNewRule()">Add New Rule</a>
+              </div>
+
+              <div class="input-field col s4">
+                <a id="delRow" class="modal-action waves-dark red btn" onclick="deleteLastRule()">Remove Last Rule</a>
+              </div>
+            </div>
+
+            <div style="padding-top:15px">
+              <table>
+                <tbody>
+                  <tr>
+                    <td><b>Itemtype</b></td>
+                    <td><b>Description</b></td>
+                    <td><b>Command Types</b></td>
+                  </tr>
+                  <tr>
+                    <td>Call</td>
+                    <td>Telephone call by origin and destination</td>
+                    <td>Call</td>
+                  </tr>
+                  <tr>
+                    <td>Color</td>
+                    <td>Color information (RGB)</td>
+                    <td>On, Off, Increase, Decrease, Percent, HSB</td>
+                  </tr>
+                  <tr>
+                    <td>Contact</td>
+                    <td>Item storing status of e.g. door/window contacts</td>
+                    <td>Open, Closed</td>
+                  </tr>
+                  <tr>
+                    <td>DateTime</td>
+                    <td>Stores date and time (see NTP binding for details)</td>
+                    <td>-</td>
+                  </tr>
+                  <tr>
+                    <td>Dimmer</td>
+                    <td>Item carrying a percentage value for dimmers</td>
+                    <td>On, Off, Increase, Decrease, Percent</td>
+                  </tr>
+                  <tr>
+                    <td>Group</td>
+                    <td>Item to nest other items / collect them in groups</td>
+                    <td>-</td>
+                  </tr>
+                  <tr>
+                    <td>Location</td>
+                    <td>GPS related information by latitude,longitude,and altitude</td>
+                    <td>Point</td>
+                  </tr>
+                  <tr>
+                    <td>Number</td>
+                    <td>Stores values in number format</td>
+                    <td>Decimal</td>
+                  </tr>
+                  <tr>
+                    <td>Rollershutter</td>
+                    <td>Typically used for blinds</td>
+                    <td>Up, Down, Stop, Move, and Percent</td>
+                  </tr>
+                  <tr>
+                    <td>String</td>
+                    <td>Stores texts</td>
+                    <td>String</td>
+                  </tr>
+                  <tr>
+                    <td>Switch</td>
+                    <td>Typically used for lights (on/off)</td>
+                    <td>On, Off</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <a id="addRule" class="modal-action modal-close waves-light btn" onclick="createRulesFile()">Create</a>
+          </div>
+        </div>
+      </div>
+    <script>
+    $(document).ready(function(){
+          var items = "/rest/items?type=json";
+          $.getJSON(items, function(result){
+            $.each(result, function(i, field){
+              $.each(field, function(i, field2){
+                if(field2.type == "DimmerItem" ||
+                   field2.type == "NumberItem" ||
+                   field2.type == "SwitchItem" ||
+                   field2.type == "ContactItem" ) {
+                  var if_select = document.createElement("option");
+                  if_select.value = field2.type
+                  if_select.text = field2.name
+                  document.getElementById('ifitem1').appendChild(if_select);
+                  var then_select = document.createElement("option");
+                  then_select.value = field2.type
+                  then_select.text = field2.name
+                  document.getElementById('thenitem1').appendChild(then_select);
+                }
+              });
+            });
+          });
+        });
+     </script>
+
+    </body>
+  </html>
