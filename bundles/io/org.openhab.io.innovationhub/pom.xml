@@ -16,7 +16,7 @@
   <groupId>org.openhab.io</groupId>
   <artifactId>org.openhab.io.innovationhub</artifactId>
 
-  <name>openHAB Innovation Rest Interface</name>
+  <name>openHAB innovationhub Administration Interface</name>
 
   <packaging>eclipse-plugin</packaging>
 </project>
